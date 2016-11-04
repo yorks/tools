@@ -8,6 +8,7 @@ CF=
 token=
 token_timeout=0
 SOURCE="${0}"
+PWD=$(pwd)
 SCRIPTDIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 # Print error message and exit with error
@@ -19,7 +20,7 @@ _exiterr()
 
 check_cf()
 {
-  for cf in "$1" "$SCRIPTDIR/weixin-corp.ini" /etc/weixin-corp.ini /tmp/weixin-corp.ini ; do
+  for cf in "$1" "${PWD}/weixin-corp.ini" "$SCRIPTDIR/weixin-corp.ini" /etc/weixin-corp.ini /tmp/weixin-corp.ini ; do
       [[ "x$cf" != "x" ]] && test -f $cf && CF=${cf} && break
   done
 
