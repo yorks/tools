@@ -10,11 +10,13 @@
 #
 
 import requests
+import pickle
 import json
 import urllib
 import datetime
-import sys
+import sys,os
 
+cookie_file='.textnow.cookie'
 
 class TextNow(object):
     def __init__(self, username, password):
@@ -32,20 +34,50 @@ class TextNow(object):
                 }
         self.session.headers.update(self.headers)
 
+    def save_cookie(self):
+        with open(cookie_file, 'w') as f:
+            pickle.dump(requests.utils.dict_from_cookiejar(self.session.cookies), f)
 
+    def load_cookie(self):
+        if not os.path.isfile(cookie_file):
+            return False
+        with open(cookie_file) as f:
+            cookies = requests.utils.cookiejar_from_dict(pickle.load(f))
+            #self.session = requests.session(cookies=cookies)
+            self.session.cookies = cookies
+            return True
+
+    def check_login(self):
+        url = 'https://www.textnow.com/account'
+        r = self.session.get(url)
+        #  window.sessionUsername = "stuyorks";
+        try:
+            return r.text.split('window.sessionUsername')[1].split('"')[1]
+        except Exception, e:
+            print e
+        return False
 
     def login(self):
+
+        if self.load_cookie():
+            un = self.check_login()
+            if un:
+                self.username = un
+                return True
+
+
         url = 'http://www.textnow.com/api/sessions'
-        data = {"username":self.username,"remember":False,"password":self.password}
+        data = {"username":self.username,"remember":True,"password":self.password}
         data = 'json='+urllib.quote(json.dumps(data).replace(' ',''))
         #print data
         self.session.headers.update({'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'})
         r = self.session.post(url, data=data)
-        print r.headers
+        #print r.headers
         print r.content
         res = json.loads(r.content)
         if self.username.find('@') != -1:
             self.username = res['username']
+            self.save_cookie()
 
     def send_msg(self, to, msg):
         url = 'https://www.textnow.com/api/users/%s/messages'% self.username
