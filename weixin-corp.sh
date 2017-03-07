@@ -64,7 +64,10 @@ http_request()
         statuscode="$($CURL -s -w "%{http_code}" -o "${tempcont}" "${2}")"
         curlret="${?}"
     elif [[ "${1}" = "post" ]]; then
-        statuscode="$($CURL-s -w "%{http_code}" "$HEADERS" -o "${tempcont}" "${2}" -d "${3}")"
+        statuscode="$($CURL -s -w "%{http_code}" "$HEADERS" -o "${tempcont}" "${2}" -d "${3}")"
+        curlret="${?}"
+    elif [[ "${1}" = "upload" ]]; then
+        statuscode="$($CURL -s -w "%{http_code}" -o "${tempcont}" "${2}" -F "${3}")"
         curlret="${?}"
     else
         set -e
@@ -123,10 +126,15 @@ get_token()
 wx_request()
 {
     cgi=$1
-    
+    data=$2
+    params=$3
+
     get_token
-    url="${API_URL_PRE}${cgi}?access_token=${token}"
-    http_request post "${url}" "$2"
+    url="${API_URL_PRE}${cgi}?access_token=${token}${params}"
+    method="post"
+    [[ "$cgi" == "media/upload" ]]  && method="upload"
+
+    http_request $method "${url}" "$data" 
 }
 
 send_text()
@@ -136,6 +144,33 @@ send_text()
     data='{"touser":"'"${1}"'","msgtype": "text","agentid":'${aid}',"text": {"content":"'"$2"'"},"safe":"0"}'
     wx_request "message/send" "$data"
 }
+_upload_tmp_media()
+{
+   fpath=$1
+   _type=$2
+   [[ "x$_type" == "x" ]]  &&  _type="image"
+   echo $_type | egrep -q "^(image|voice|video|file)$" || exit 400
+   test -e $fpath || exit 401
+   wx_request "media/upload" "media=@${fpath}" "&type=${_type}"
+}
+
+send_image()
+{
+    mediaID=$2
+    test -e "$mediaID" && {
+        rsp=$(_upload_tmp_media "$mediaID" "image")
+        mediaID=$(get_json_string_value "$rsp"  media_id)
+        
+    }
+    [[ "x" == "x$mediaID" ]] && exit 999 
+
+    aid=$3
+    [[ "x" == "x$aid" ]] && aid=2
+    data='{"touser":"'"${1}"'","msgtype": "image","agentid":'${aid}',"image": {"media_id":"'"$mediaID"'"},"safe":"0"}'
+    wx_request "message/send" "$data"
+}
+
 check_deps
 check_cf
 send_text yangyou "$1"
+#send_image yangyou "$1"
