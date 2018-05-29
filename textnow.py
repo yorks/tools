@@ -14,15 +14,17 @@ import pickle
 import json
 import urllib
 import datetime
-import sys,os
+import sys,os,re
 
 cookie_file='.textnow.cookie'
 
 class TextNow(object):
-    def __init__(self, username, password):
+    def __init__(self, username=None, password=None, connect_sid=None):
         self.username = username
         self.email    = username
         self.password = password
+        self.sid      = connect_sid
+
         self.session = requests.Session()
         self.headers = {'Host':'www.textnow.com',
                         'Referer':'https://www.textnow.com/login',
@@ -32,6 +34,10 @@ class TextNow(object):
                         'Pragma': 'no-cache',
                         'Cache-Control': 'no-cache',
                 }
+
+        if self.sid:
+            self.headers['Cookie'] = "unsupported_browsers_notif=true; connect.sid=%s; language=zh"% self.sid
+
         self.session.headers.update(self.headers)
 
     def save_cookie(self):
@@ -55,24 +61,60 @@ class TextNow(object):
             return r.text.split('window.sessionUsername')[1].split('"')[1]
         except Exception, e:
             print e
+            print "cookie expired?"
         return False
 
-    def login(self):
+    def _index_page(self):
+        ''' request index page get cookie '''
+        url = 'https://www.textnow.com/'
+        r = self.session.get(url)
+        ''' <meta name="csrf-token" content="C4huOo2A-YH8E1frEMB9LZ-1AONaTS9Zg0mc" >
+        '''
+        try:
+            token = re.findall(r'name="csrf-token" content="([^"]+)"', r.text)[0]
+        except Exception, e:
+            print e
+            print 'index page exception, cannot found the csrf-token'
+            return False
+        self.session.headers['X-CSRF-TOKEN'] = token
+        return token
 
+    def login(self):
+        # login by cookie files
+        tk = self._index_page()
         if self.load_cookie():
             un = self.check_login()
-            if un:
+            if un and un != 'undefined':
                 self.username = un
+                print self.username + " logined by cookiefile"
                 return True
 
+        # login by connect_sid cookie commanline
+        if not self.sid:
+            print "no sid given"
+            return False
+        un = self.check_login()
+        if un and un != 'undefined':
+            self.username = un
+            print self.username + " logined by cookiefile"
+            self.save_cookie()
+            return True
+        return False
 
+
+        # username password login TODO
+        tk = self._index_page()
+        if not tk:
+            return False
         url = 'http://www.textnow.com/api/sessions'
         data = {"username":self.username,"remember":True,"password":self.password}
         data = 'json='+urllib.quote(json.dumps(data).replace(' ',''))
         #print data
+        print self.session.cookies
         self.session.headers.update({'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'})
+        print self.session.headers
         r = self.session.post(url, data=data)
-        #print r.headers
+        print r.headers
         print r.content
         res = json.loads(r.content)
         if self.username.find('@') != -1:
@@ -92,13 +134,25 @@ class TextNow(object):
 
 
 if __name__ == "__main__":
-    username = sys.argv[1]
-    passwd   = sys.argv[2]
-    to       = sys.argv[3]
-    msg      = sys.argv[4]
+    username=''
+    passwd=''
+    sid=''
+    try: # username&password login TODO
+        msg = sys.argv[4]
+        username = sys.argv[1]
+        passwd   = sys.argv[2]
+        to       = sys.argv[3]
+    except: # cookie login pass the connect_sid cookie value
+        try:# python2 textnow.py 's:Kw**/*****'  +1860858**** msg_active_gv
+            msg = sys.argv[3]
+            to  = sys.argv[2]
+            sid = sys.argv[1]
+        except: # cookie file login
+            msg = sys.argv[2]
+            to  = sys.argv[1]
 
-    tn = TextNow(username, passwd)
-    tn.login()
+    tn = TextNow(username, passwd, sid)
+    if not tn.login():
+        print "no login"
+        sys.exit(1)
     tn.send_msg(to, msg)
-
-
