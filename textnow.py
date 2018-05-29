@@ -6,7 +6,10 @@
 #    for keep google voice No. active
 #
 #  add this to a cron job like this:
-#     python2 textnow.py your_text_now_username your_text_now_password  your_gv_no. msg_you_want_to_send
+#     python2 textnow.py cookie_connect_sid_value  your_gv_no. msg_you_want_to_send
+#
+# How to get cookie connect_sid
+#    login by web browser such as Firefox, and then open Develop, you can see the cookie value.
 #
 
 import requests
